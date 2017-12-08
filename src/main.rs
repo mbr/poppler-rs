@@ -27,20 +27,38 @@ where
 }
 
 
+fn path_to_glib_url<P: AsRef<path::Path>>(p: P) -> Result<CString, glib::error::Error> {
+    // canonicalize path, try to wrap failures into a glib error
+    let canonical = fs::canonicalize(p).map_err(|_| {
+        glib::error::Error::new(
+            glib::FileError::Noent,
+            "Could not turn path into canonical path. Maybe it does not exist?",
+        )
+    })?;
+
+    // construct path string
+    let mut osstr_path: OsString = "file:///".into();
+    osstr_path.push(canonical);
+
+    // we need to round-trip to string, as not all os strings are 8 bytes
+    let pdf_string = osstr_path.into_string().map_err(|_| {
+        glib::error::Error::new(
+            glib::FileError::Inval,
+            "Path invalid (contains non-utf8 characters)",
+        )
+    })?;
+
+    CString::new(pdf_string).map_err(|_| {
+        glib::error::Error::new(
+            glib::FileError::Inval,
+            "Path invalid (contains NUL characters)",
+        )
+    })
+}
+
+
 impl PopplerDocumentRef {
     fn new_from_file<P: AsRef<path::Path>>(p: P, password: &str) -> Result<(), glib::error::Error> {
-        // canonicalize path, try to wrap failures into a glib error
-        let canonical = fs::canonicalize(p).map_err(|_| {
-            glib::error::Error::new(
-                glib::FileError::Noent,
-                "Could not turn path into canonical path. Maybe it does not exist?",
-            )
-        })?;
-
-        // construct path string
-        let mut pdf_path: OsString = "file:///".into();
-        pdf_path.push(canonical);
-
         let pw = CString::new(password).map_err(|_| {
             glib::error::Error::new(
                 glib::FileError::Inval,
@@ -48,24 +66,9 @@ impl PopplerDocumentRef {
             )
         })?;
 
-        // we need to round-trip to string, as not all os strings are 8 bytes
-        let pdf_string = pdf_path.into_string().map_err(|_| {
-            glib::error::Error::new(
-                glib::FileError::Inval,
-                "Path invalid (contains non-utf8 characters)",
-            )
-        })?;
-
-        let pdf_cstring = CString::new(pdf_string).map_err(|_| {
-            glib::error::Error::new(
-                glib::FileError::Inval,
-                "Path invalid (contains NUL characters)",
-            )
-        })?;
-
-        println!("Opening {:?}", pdf_cstring);
+        let path_cstring = path_to_glib_url(p)?;
         let doc = call_with_gerror(|err_ptr| unsafe {
-            ffi::poppler_document_new_from_file(pdf_cstring.as_ptr(), pw.as_ptr(), err_ptr)
+            ffi::poppler_document_new_from_file(path_cstring.as_ptr(), pw.as_ptr(), err_ptr)
         })?;
 
         Ok(())
