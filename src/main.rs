@@ -1,13 +1,20 @@
-use std::os::raw::c_void;
+use std::os::raw::{c_double, c_int, c_void};
 
+extern crate cairo;
 extern crate glib;
 extern crate glib_sys;
+
+use cairo::prelude::SurfaceExt;
 
 use glib_sys::GError;
 use std::ffi::{CString, OsString};
 use std::{fs, path, ptr};
 
+#[derive(Debug)]
 struct PopplerDocumentRef(*mut ffi::PopplerDocument);
+
+#[derive(Debug)]
+struct PopplerPageRef(*mut ffi::PopplerPage);
 
 fn call_with_gerror<T, F>(f: F) -> Result<*mut T, glib::error::Error>
 where
@@ -58,7 +65,10 @@ fn path_to_glib_url<P: AsRef<path::Path>>(p: P) -> Result<CString, glib::error::
 
 
 impl PopplerDocumentRef {
-    pub fn new_from_file<P: AsRef<path::Path>>(p: P, password: &str) -> Result<PopplerDocumentRef, glib::error::Error> {
+    pub fn new_from_file<P: AsRef<path::Path>>(
+        p: P,
+        password: &str,
+    ) -> Result<PopplerDocumentRef, glib::error::Error> {
         let pw = CString::new(password).map_err(|_| {
             glib::error::Error::new(
                 glib::FileError::Inval,
@@ -79,6 +89,32 @@ impl PopplerDocumentRef {
         //        has a positive number of pages?
         (unsafe { ffi::poppler_document_get_n_pages(self.0) }) as usize
     }
+
+    pub fn get_page(&self, index: usize) -> Option<PopplerPageRef> {
+        match unsafe { ffi::poppler_document_get_page(self.0, index as c_int) } {
+            ptr if ptr.is_null() => None,
+            ptr => Some(PopplerPageRef(ptr)),
+        }
+
+    }
+}
+
+
+impl PopplerPageRef {
+    fn get_size(&self) -> (f64, f64) {
+        let mut width: f64 = 0.0;
+        let mut height: f64 = 0.0;
+
+        unsafe {
+            ffi::poppler_page_get_size(
+                self.0,
+                &mut width as *mut f64 as *mut c_double,
+                &mut height as *mut f64 as *mut c_double,
+            )
+        }
+
+        (width, height)
+    }
 }
 
 
@@ -88,13 +124,17 @@ pub struct PoppperPageRef {
 }
 
 mod ffi {
-    use std::os::raw::{c_char, c_int};
+    use std::os::raw::{c_char, c_double, c_int, c_void};
     use glib_sys;
 
     // FIXME: is this the correct way to get opaque types?
+    // FIXME: alternative: https://docs.rs/cairo-sys-rs/0.5.0/src/cairo_sys/lib.rs.html#64
     // NOTE: https://github.com/rust-lang/rust/issues/27303
     // NOTE: ask F/O about this
     pub enum PopplerDocument {}
+    pub enum PopplerPage {}
+
+    // FIXME: *const instead of mut pointers?
 
     #[link(name = "poppler-glib")]
     extern "C" {
@@ -103,8 +143,19 @@ mod ffi {
             password: *const c_char,
             error: *mut *mut glib_sys::GError,
         ) -> *mut PopplerDocument;
-
         pub fn poppler_document_get_n_pages(document: *mut PopplerDocument) -> c_int;
+        pub fn poppler_document_get_page(
+            document: *mut PopplerDocument,
+            index: c_int,
+        ) -> *mut PopplerPage;
+
+        pub fn poppler_page_get_size(
+            page: *mut PopplerPage,
+            width: *mut c_double,
+            height: *mut c_double,
+        );
+        pub fn poppler_page_render_for_printing(page: *mut PopplerPage, cairo: *mut c_void);
+    // cairo_t *cairo);
     }
 }
 
@@ -114,40 +165,26 @@ fn run() -> Result<(), glib::error::Error> {
     let doc = PopplerDocumentRef::new_from_file(filename, "")?;
     let num_pages = doc.get_n_pages();
 
-    //     num_pages = poppler_document_get_n_pages (document);
+    println!("Document has {} page(s)", num_pages);
 
-    //      Page size does not matter here as the size is changed before
-    //      * each page
-    //     surface = cairo_ps_surface_create ("output.ps", 595, 842);
-    //     cr = cairo_create (surface);
-    //     for (i = 0; i < num_pages; i++) {
-    //         page = poppler_document_get_page (document, i);
-    //         if (page == NULL) {
-    //             printf("poppler fail: page not found\n");
-    //             return 1;
-    //         }
-    //         poppler_page_get_size (page, &width, &height);
-    //         cairo_ps_surface_set_size (surface, width, height);
-    //         cairo_save (cr);
-    //         poppler_page_render_for_printing (page, cr);
-    //         cairo_restore (cr);
-    //         cairo_surface_show_page (surface);
+    let mut surface = cairo::PDFSurface::create("output.pdf", 420.0, 595.0);
+    let ctx = cairo::Context::new(&mut surface);
+
+    // FIXME: move iterator to poppler
+    for page_num in 0..num_pages {
+        let page = doc.get_page(page_num).unwrap();
+        let (w, h) = page.get_size();
+        println!("page {} has size {}, {}", page_num, w, h);
+        // surface.set_size(w as i32, h as i32);  // ??
+
+        ctx.save();
+        //         poppler_page_render_for_printing (page, cr);
+        ctx.restore();
+        ctx.show_page();
+    }
     //         g_object_unref (page);
-    //     }
-    //     status = cairo_status(cr);
-    //     if (status)
-    //         printf("%s\n", cairo_status_to_string (status));
-    //     cairo_destroy (cr);
-    //     cairo_surface_finish (surface);
-    //     status = cairo_surface_status(surface);
-    //     if (status)
-    //         printf("%s\n", cairo_status_to_string (status));
-    //     cairo_surface_destroy (surface);
 
-    //     g_object_unref (document);
-
-    //     return 0;
-    // }
+    surface.finish();
 
     Ok(())
 }
