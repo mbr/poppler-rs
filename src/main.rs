@@ -1,4 +1,4 @@
-use std::os::raw::{c_char, c_void};
+use std::os::raw::c_void;
 
 extern crate glib;
 extern crate glib_sys;
@@ -58,7 +58,7 @@ fn path_to_glib_url<P: AsRef<path::Path>>(p: P) -> Result<CString, glib::error::
 
 
 impl PopplerDocumentRef {
-    fn new_from_file<P: AsRef<path::Path>>(p: P, password: &str) -> Result<(), glib::error::Error> {
+    pub fn new_from_file<P: AsRef<path::Path>>(p: P, password: &str) -> Result<PopplerDocumentRef, glib::error::Error> {
         let pw = CString::new(password).map_err(|_| {
             glib::error::Error::new(
                 glib::FileError::Inval,
@@ -71,7 +71,13 @@ impl PopplerDocumentRef {
             ffi::poppler_document_new_from_file(path_cstring.as_ptr(), pw.as_ptr(), err_ptr)
         })?;
 
-        Ok(())
+        Ok(PopplerDocumentRef(doc))
+    }
+
+    pub fn get_n_pages(&self) -> usize {
+        // FIXME: what's the correct type here? can we assume a document
+        //        has a positive number of pages?
+        (unsafe { ffi::poppler_document_get_n_pages(self.0) }) as usize
     }
 }
 
@@ -82,7 +88,7 @@ pub struct PoppperPageRef {
 }
 
 mod ffi {
-    use std::os::raw::c_char;
+    use std::os::raw::{c_char, c_int};
     use glib_sys;
 
     // FIXME: is this the correct way to get opaque types?
@@ -97,36 +103,16 @@ mod ffi {
             password: *const c_char,
             error: *mut *mut glib_sys::GError,
         ) -> *mut PopplerDocument;
+
+        pub fn poppler_document_get_n_pages(document: *mut PopplerDocument) -> c_int;
     }
 }
 
 
-fn main() {
+fn run() -> Result<(), glib::error::Error> {
     let filename = "test.pdf";
-
-    // int main(int argc, char *argv[])
-    // {
-
-
-    //     double width, height;
-    //     GError *error;
-    //     const char *filename;
-    //     gchar *absolute, *uri;
-    //     int num_pages, i;
-    //     cairo_surface_t *surface;
-    //     cairo_t *cr;
-    //     cairo_status_t status;
-
-    match PopplerDocumentRef::new_from_file(filename, "") {
-        Ok(_) => {}
-        Err(e) => println!("ERROR: {}", e),
-    };
-
-    //     document = poppler_document_new_from_file (uri, NULL, &error);
-    //     if (document == NULL) {
-    //         printf("poppler fail: %s\n", error->message);
-    //         return 1;
-    //     }
+    let doc = PopplerDocumentRef::new_from_file(filename, "")?;
+    let num_pages = doc.get_n_pages();
 
     //     num_pages = poppler_document_get_n_pages (document);
 
@@ -162,4 +148,17 @@ fn main() {
 
     //     return 0;
     // }
+
+    Ok(())
+}
+
+
+fn main() {
+    match run() {
+        Ok(()) => (),
+        Err(e) => {
+            println!("ERROR: {}", e);
+        }
+    };
+
 }
