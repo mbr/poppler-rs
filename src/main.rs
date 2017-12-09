@@ -1,6 +1,7 @@
 use std::os::raw::{c_double, c_int, c_void};
 
 extern crate cairo;
+extern crate cairo_sys;
 extern crate glib;
 extern crate glib_sys;
 
@@ -95,13 +96,12 @@ impl PopplerDocumentRef {
             ptr if ptr.is_null() => None,
             ptr => Some(PopplerPageRef(ptr)),
         }
-
     }
 }
 
 
 impl PopplerPageRef {
-    fn get_size(&self) -> (f64, f64) {
+    pub fn get_size(&self) -> (f64, f64) {
         let mut width: f64 = 0.0;
         let mut height: f64 = 0.0;
 
@@ -115,6 +115,10 @@ impl PopplerPageRef {
 
         (width, height)
     }
+
+    pub fn render_for_printing(&self, ctx: &mut cairo::Context) {
+        unsafe { ffi::poppler_page_render_for_printing(self.0, ctx.to_raw_none()) }
+    }
 }
 
 
@@ -124,7 +128,8 @@ pub struct PoppperPageRef {
 }
 
 mod ffi {
-    use std::os::raw::{c_char, c_double, c_int, c_void};
+    use std::os::raw::{c_char, c_double, c_int};
+    use cairo_sys;
     use glib_sys;
 
     // FIXME: is this the correct way to get opaque types?
@@ -154,8 +159,10 @@ mod ffi {
             width: *mut c_double,
             height: *mut c_double,
         );
-        pub fn poppler_page_render_for_printing(page: *mut PopplerPage, cairo: *mut c_void);
-    // cairo_t *cairo);
+        pub fn poppler_page_render_for_printing(
+            page: *mut PopplerPage,
+            cairo: *mut cairo_sys::cairo_t,
+        );
     }
 }
 
@@ -168,7 +175,7 @@ fn run() -> Result<(), glib::error::Error> {
     println!("Document has {} page(s)", num_pages);
 
     let mut surface = cairo::PDFSurface::create("output.pdf", 420.0, 595.0);
-    let ctx = cairo::Context::new(&mut surface);
+    let mut ctx = cairo::Context::new(&mut surface);
 
     // FIXME: move iterator to poppler
     for page_num in 0..num_pages {
@@ -178,7 +185,7 @@ fn run() -> Result<(), glib::error::Error> {
         // surface.set_size(w as i32, h as i32);  // ??
 
         ctx.save();
-        //         poppler_page_render_for_printing (page, cr);
+        page.render_for_printing(&mut ctx);
         ctx.restore();
         ctx.show_page();
     }
@@ -197,5 +204,4 @@ fn main() {
             println!("ERROR: {}", e);
         }
     };
-
 }
