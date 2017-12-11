@@ -163,6 +163,32 @@ mod ffi {
             page: *mut PopplerPage,
             cairo: *mut cairo_sys::cairo_t,
         );
+
+        // FIXME: needs to be in upstream version of cairo-rs
+        pub fn cairo_pdf_surface_set_size(
+            surface: *mut cairo_sys::cairo_surface_t,
+            width_in_points: c_double,
+            height_in_points: c_double,
+        );
+    }
+}
+
+
+// FIXME: needs to be in upstream version of cairo-rs
+pub trait CairoSetSize {
+    fn set_size(&mut self, width_in_points: f64, height_in_points: f64);
+}
+
+impl CairoSetSize for cairo::PDFSurface {
+    // FIXME: does this need mut?
+    fn set_size(&mut self, width_in_points: f64, height_in_points: f64) {
+        unsafe {
+            ffi::cairo_pdf_surface_set_size(
+                self.to_raw_none(),
+                width_in_points as c_double,
+                height_in_points as c_double,
+            )
+        }
     }
 }
 
