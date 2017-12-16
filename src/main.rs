@@ -12,10 +12,10 @@ use std::ffi::{CString, OsString};
 use std::{fs, path, ptr};
 
 #[derive(Debug)]
-struct PopplerDocumentRef(*mut ffi::PopplerDocument);
+struct PopplerDocument(*mut ffi::PopplerDocument);
 
 #[derive(Debug)]
-struct PopplerPageRef(*mut ffi::PopplerPage);
+struct PopplerPage(*mut ffi::PopplerPage);
 
 fn call_with_gerror<T, F>(f: F) -> Result<*mut T, glib::error::Error>
 where
@@ -65,11 +65,11 @@ fn path_to_glib_url<P: AsRef<path::Path>>(p: P) -> Result<CString, glib::error::
 }
 
 
-impl PopplerDocumentRef {
+impl PopplerDocument {
     pub fn new_from_file<P: AsRef<path::Path>>(
         p: P,
         password: &str,
-    ) -> Result<PopplerDocumentRef, glib::error::Error> {
+    ) -> Result<PopplerDocument, glib::error::Error> {
         let pw = CString::new(password).map_err(|_| {
             glib::error::Error::new(
                 glib::FileError::Inval,
@@ -82,7 +82,7 @@ impl PopplerDocumentRef {
             ffi::poppler_document_new_from_file(path_cstring.as_ptr(), pw.as_ptr(), err_ptr)
         })?;
 
-        Ok(PopplerDocumentRef(doc))
+        Ok(PopplerDocument(doc))
     }
 
     pub fn get_n_pages(&self) -> usize {
@@ -91,16 +91,16 @@ impl PopplerDocumentRef {
         (unsafe { ffi::poppler_document_get_n_pages(self.0) }) as usize
     }
 
-    pub fn get_page(&self, index: usize) -> Option<PopplerPageRef> {
+    pub fn get_page(&self, index: usize) -> Option<PopplerPage> {
         match unsafe { ffi::poppler_document_get_page(self.0, index as c_int) } {
             ptr if ptr.is_null() => None,
-            ptr => Some(PopplerPageRef(ptr)),
+            ptr => Some(PopplerPage(ptr)),
         }
     }
 }
 
 
-impl PopplerPageRef {
+impl PopplerPage {
     pub fn get_size(&self) -> (f64, f64) {
         let mut width: f64 = 0.0;
         let mut height: f64 = 0.0;
@@ -195,7 +195,7 @@ impl CairoSetSize for cairo::PDFSurface {
 
 fn run() -> Result<(), glib::error::Error> {
     let filename = "test.pdf";
-    let doc = PopplerDocumentRef::new_from_file(filename, "")?;
+    let doc = PopplerDocument::new_from_file(filename, "")?;
     let num_pages = doc.get_n_pages();
 
     println!("Document has {} page(s)", num_pages);
