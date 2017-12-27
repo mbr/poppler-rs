@@ -1,7 +1,7 @@
 poppler-rs
 ==========
 
-[libpoppler](https://poppler.freedesktop.org/) is a library for rendering PDF files. It uses [cairo](https://crates.io/crates/cairo-rs) for rendering, as a result PDF content can be drawn onto a number of surfaces, including SVG, PDF or PNG.
+[libpoppler](https://poppler.freedesktop.org/) is a library for rendering PDF files, this are Rust bindings to it. It uses [cairo](https://crates.io/crates/cairo-rs) for rendering, as a result PDF content can be drawn onto a number of surfaces, including SVG, PDF or PNG.
 
 **Warning**: libpoppler is based on the GPL-licensed [xpdf-3.0](http://www.foolabs.com/xpdf/) and is unlikely to ever be released under a different license. As a result, every program or library linking against this crate *must* be GPL licensed as well.
 
