@@ -18,7 +18,6 @@ struct PopplerDocument(*mut ffi::PopplerDocument);
 #[derive(Debug)]
 struct PopplerPage(*mut ffi::PopplerPage);
 
-
 impl PopplerDocument {
     pub fn new_from_file<P: AsRef<path::Path>>(
         p: P,

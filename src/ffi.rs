@@ -29,10 +29,7 @@ extern "C" {
         width: *mut c_double,
         height: *mut c_double,
     );
-    pub fn poppler_page_render_for_printing(
-        page: *mut PopplerPage,
-        cairo: *mut cairo_sys::cairo_t,
-    );
+    pub fn poppler_page_render_for_printing(page: *mut PopplerPage, cairo: *mut cairo_sys::cairo_t);
 
     // FIXME: needs to be in upstream version of cairo-rs
     pub fn cairo_pdf_surface_set_size(
