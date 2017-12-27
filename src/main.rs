@@ -4,66 +4,19 @@ extern crate glib;
 extern crate glib_sys;
 
 mod ffi;
+mod util;
 
 use cairo::prelude::SurfaceExt;
 
-use glib_sys::GError;
-use std::ffi::{CString, OsString};
+use std::ffi::CString;
 use std::os::raw::{c_double, c_int, c_void};
-use std::{fs, path, ptr};
+use std::path;
 
 #[derive(Debug)]
 struct PopplerDocument(*mut ffi::PopplerDocument);
 
 #[derive(Debug)]
 struct PopplerPage(*mut ffi::PopplerPage);
-
-fn call_with_gerror<T, F>(f: F) -> Result<*mut T, glib::error::Error>
-where
-    F: FnOnce(*mut *mut GError) -> *mut T,
-{
-    // initialize error to a null-pointer
-    let mut err = ptr::null_mut();
-
-    // call the c-library function
-    let return_value = f(&mut err as *mut *mut GError);
-
-    if return_value.is_null() {
-        Err(glib::error::Error::wrap(err))
-    } else {
-        Ok(return_value)
-    }
-}
-
-
-fn path_to_glib_url<P: AsRef<path::Path>>(p: P) -> Result<CString, glib::error::Error> {
-    // canonicalize path, try to wrap failures into a glib error
-    let canonical = fs::canonicalize(p).map_err(|_| {
-        glib::error::Error::new(
-            glib::FileError::Noent,
-            "Could not turn path into canonical path. Maybe it does not exist?",
-        )
-    })?;
-
-    // construct path string
-    let mut osstr_path: OsString = "file:///".into();
-    osstr_path.push(canonical);
-
-    // we need to round-trip to string, as not all os strings are 8 bytes
-    let pdf_string = osstr_path.into_string().map_err(|_| {
-        glib::error::Error::new(
-            glib::FileError::Inval,
-            "Path invalid (contains non-utf8 characters)",
-        )
-    })?;
-
-    CString::new(pdf_string).map_err(|_| {
-        glib::error::Error::new(
-            glib::FileError::Inval,
-            "Path invalid (contains NUL characters)",
-        )
-    })
-}
 
 
 impl PopplerDocument {
@@ -78,8 +31,8 @@ impl PopplerDocument {
             )
         })?;
 
-        let path_cstring = path_to_glib_url(p)?;
-        let doc = call_with_gerror(|err_ptr| unsafe {
+        let path_cstring = util::path_to_glib_url(p)?;
+        let doc = util::call_with_gerror(|err_ptr| unsafe {
             ffi::poppler_document_new_from_file(path_cstring.as_ptr(), pw.as_ptr(), err_ptr)
         })?;
 
