@@ -1,7 +1,10 @@
 [package]
 authors = ["Marc Brinkmann <git@marcbrinkmann.de>"]
-name = "popplertest"
+name = "poppler"
+license = "GPLv2"
 version = "0.1.0"
+description = "Wrapper for the GPL-licensed Poppler PDF rendering library."
+repository = "https://github.com/mbr/poppler-rs"
 
 [dependencies]
 cairo-rs = "0.3.0"
